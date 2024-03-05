@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ClientHandler extends WebSocketServer {
 
-    private static final int portNumber = 4732;
+    private static final int portNumber = 7438;
     private static final ConcurrentLinkedQueue<User> users = new ConcurrentLinkedQueue<>();
 
     public ClientHandler() {
