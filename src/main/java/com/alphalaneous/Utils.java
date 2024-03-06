@@ -17,7 +17,7 @@ public class Utils {
 
         //check for collisions
         for(User user : ClientHandler.getUsers()){
-            if(ClientHandler.isValidUser(user) && user.isHost && user.lobbyID.contentEquals(str)) {
+            if(ClientHandler.isValidUser(user) && user.isHost && User.isEqualLobby(user.lobbyID, str.toString())) {
                 return generateLobbyCode();
             }
         }

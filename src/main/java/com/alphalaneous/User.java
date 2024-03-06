@@ -8,12 +8,23 @@ public class User {
 
     public WebSocket webSocket;
     public String name;
+    public int accountID;
+    public int userID;
     public boolean isHost;
+    public boolean isPauseLink;
     public String lobbyID;
     int requests = 0;
 
     public String getName() {
         return name;
+    }
+
+    public int getAccountID() {
+        return accountID;
+    }
+
+    public int getUserID() {
+        return userID;
     }
 
     public boolean isHost() {
@@ -25,11 +36,18 @@ public class User {
     }
 
     public void createLobby(){
-        if(this.lobbyID != null) {
+        if(this.lobbyID == null) {
             this.isHost = true;
             this.lobbyID = Utils.generateLobbyCode();
             sendLobbyCreatedMessage();
         }
+    }
+
+    public static boolean isEqualLobby(String lobbyIDa, String lobbyIDb){
+        if(lobbyIDa != null && lobbyIDb != null){
+            return lobbyIDa.equals(lobbyIDb);
+        }
+        return false;
     }
 
     public String getLobbyID(){
@@ -37,31 +55,97 @@ public class User {
     }
 
     public int getLobbyUserCount(){
-        return (int) ClientHandler.getUsers().stream().filter(user -> ClientHandler.isValidUser(user) && user.lobbyID.equals(this.lobbyID)).count();
+
+        int count = 0;
+
+        for(User user : ClientHandler.getUsers()){
+            if(ClientHandler.isValidUser(user)){
+                if(this.lobbyID != null && isEqualLobby(user.lobbyID, this.lobbyID)){
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     public void propagateDeaths(){
         incrementDeathRequests();
 
-        ClientHandler.getUsers().forEach(user -> {
-            if(ClientHandler.isValidUser(user) && user.lobbyID.equals(this.lobbyID)) {
+        for(User user : ClientHandler.getUsers()){
+            if(ClientHandler.isValidUser(user) && isEqualLobby(user.lobbyID, this.lobbyID) && this != user) {
                 user.sendDeath();
             }
-        });
+        }
+    }
+
+    public void propagatePause(){
+
+        boolean isPauseLink = false;
+
+        for(User user : ClientHandler.getUsers()){
+            if(ClientHandler.isValidUser(user) && isEqualLobby(user.lobbyID, this.lobbyID) && user.isHost) {
+                isPauseLink = user.isPauseLink;
+                break;
+            }
+        }
+
+        if(isPauseLink) {
+            for (User user : ClientHandler.getUsers()) {
+                if (ClientHandler.isValidUser(user) && isEqualLobby(user.lobbyID, this.lobbyID) && this != user) {
+                    user.sendPause();
+                }
+            }
+        }
+    }
+
+    public void propagateUnpause(){
+
+        boolean isPauseLink = false;
+
+        for(User user : ClientHandler.getUsers()){
+            if(ClientHandler.isValidUser(user) && isEqualLobby(user.lobbyID, this.lobbyID) && user.isHost) {
+                isPauseLink = user.isPauseLink;
+                break;
+            }
+        }
+
+        if(isPauseLink) {
+            for (User user : ClientHandler.getUsers()) {
+                if (ClientHandler.isValidUser(user) && isEqualLobby(user.lobbyID, this.lobbyID) && this != user) {
+                    user.sendUnpause();
+                }
+            }
+        }
     }
 
     public void disconnectFromLobby(){
         if(this.isHost){
-            ClientHandler.getUsers().forEach(user -> {
-                if(ClientHandler.isValidUser(user) && user.lobbyID.equals(this.lobbyID)) {
+            for(User user : ClientHandler.getUsers()){
+                if(ClientHandler.isValidUser(user) && isEqualLobby(user.lobbyID, this.lobbyID) && !user.isHost) {
                     user.disconnectFromLobby();
                     user.sendDisconnectedFromLobbyMessage();
                 }
-            });
+            }
         }
+
+        String tempLobbyID = lobbyID;
 
         this.isHost = false;
         this.lobbyID = null;
+
+        sendLobbyMembersToEveryone(tempLobbyID);
+    }
+
+    public void kickUser(int accountID){
+        if(this.isHost){
+            for(User user : ClientHandler.getUsers()){
+                if(ClientHandler.isValidUser(user) && user.accountID == accountID) {
+                    user.sendKickedMessage();
+                    user.disconnectFromLobby();
+                }
+            }
+            sendLobbyMembersToEveryone(this.lobbyID);
+        }
     }
 
     public void sendMessage(String message){
@@ -73,16 +157,11 @@ public class User {
     public void connectToLobby(String lobbyID){
 
         for(User user : ClientHandler.getUsers()){
-            if(ClientHandler.isValidUser(user) && user.isHost && user.lobbyID.equals(this.lobbyID)) {
+            if(ClientHandler.isValidUser(user) && user.isHost && isEqualLobby(user.lobbyID, lobbyID)) {
                 this.lobbyID = lobbyID;
                 sendConnectedToLobbyMessage();
-                sendLobbyMembers();
+                sendLobbyMembersToEveryone(this.lobbyID);
 
-                ClientHandler.getUsers().forEach(user1 -> {
-                    if(ClientHandler.isValidUser(user) && user1.lobbyID.equals(this.lobbyID)) {
-                        user1.sendLobbyMembers();
-                    }
-                });
                 return;
             }
         }
@@ -90,8 +169,10 @@ public class User {
         sendInvalidLobbyMessage();
     }
 
-    public void connect(String name){
+    public void connect(String name, int accountID, int userID){
         this.name = name;
+        this.accountID = accountID;
+        this.userID = userID;
     }
 
     public void disconnect(){
@@ -117,6 +198,33 @@ public class User {
         }
     }
 
+    public JSONArray generateMemberList(){
+        JSONArray members = new JSONArray();
+
+        for(User user : ClientHandler.getUsers()){
+            if(ClientHandler.isValidUser(user) && isEqualLobby(user.lobbyID, this.lobbyID)) {
+
+                JSONObject memberData = new JSONObject();
+                memberData.put("username", user.getName());
+                memberData.put("account_id", user.getAccountID());
+                memberData.put("user_id", user.getUserID());
+                memberData.put("is_host", user.isHost);
+
+                members.put(memberData);
+            }
+        }
+
+        return members;
+    }
+
+    public void sendLobbyMembersToEveryone(String lobbyID){
+        for(User user : ClientHandler.getUsers()){
+            if(ClientHandler.isValidUser(user) && isEqualLobby(user.lobbyID, lobbyID)) {
+                user.sendLobbyMembers();
+            }
+        }
+    }
+
     public void sendLobbyMembers(){
 
         JSONObject object = new JSONObject();
@@ -124,13 +232,7 @@ public class User {
         object.put("lobby", lobbyID);
         object.put("status", "member_list");
 
-        JSONArray members = new JSONArray();
-
-        for(User user : ClientHandler.getUsers()){
-            if(ClientHandler.isValidUser(user) && user.lobbyID.equals(this.lobbyID)) {
-                members.put(user.getName());
-            }
-        }
+        JSONArray members = generateMemberList();
 
         object.put("members", members);
 
@@ -145,17 +247,32 @@ public class User {
         sendMessage(object.toString(4));
     }
 
+    public void sendPause(){
+        JSONObject object = new JSONObject();
+        object.put("lobby", lobbyID);
+        object.put("status", "pause");
+
+        sendMessage(object.toString(4));
+    }
+
+    public void sendUnpause(){
+        JSONObject object = new JSONObject();
+        object.put("lobby", lobbyID);
+        object.put("status", "unpause");
+
+        sendMessage(object.toString(4));
+    }
+
     public void sendConnectedToLobbyMessage(){
         JSONObject object = new JSONObject();
         object.put("lobby", lobbyID);
         object.put("status", "connected");
-
+        object.put("members", generateMemberList());
         sendMessage(object.toString(4));
     }
 
     public void sendInvalidLobbyMessage(){
         JSONObject object = new JSONObject();
-        object.put("lobby", lobbyID);
         object.put("status", "invalid");
 
         sendMessage(object.toString(4));
@@ -177,10 +294,19 @@ public class User {
         sendMessage(object.toString(4));
     }
 
+    public void sendKickedMessage(){
+        JSONObject object = new JSONObject();
+        object.put("lobby", lobbyID);
+        object.put("status", "kicked");
+
+        sendMessage(object.toString(4));
+    }
+
     public void sendLobbyCreatedMessage(){
         JSONObject object = new JSONObject();
         object.put("lobby", lobbyID);
         object.put("status", "created");
+        object.put("members", generateMemberList());
 
         sendMessage(object.toString(4));
     }

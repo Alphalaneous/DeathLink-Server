@@ -39,14 +39,14 @@ public class Main {
                                 StringBuilder users = new StringBuilder();
 
                                 ClientHandler.getUsers().forEach(user1 -> {
-                                    if(ClientHandler.isValidUser(user1) && user.getLobbyID().equals(user1.getLobbyID())){
+                                    if(ClientHandler.isValidUser(user1) && User.isEqualLobby(user.lobbyID, user1.lobbyID)){
                                         users.append(user1.getName()).append(", ");
                                     }
                                 });
 
                                 String usersFinal = users.substring(0, users.length()-2);
 
-                                System.out.print(usersFinal + "]");
+                                System.out.print(usersFinal + "]\n");
                             }
                         });
                         break;
@@ -55,6 +55,7 @@ public class Main {
             }
         }
         catch (Error | Exception e){
+            e.printStackTrace();
             System.out.println("Retrying...");
             Utils.sleep(5000);
             main(args);

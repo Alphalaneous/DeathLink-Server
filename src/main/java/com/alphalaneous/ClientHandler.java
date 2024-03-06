@@ -33,38 +33,60 @@ public class ClientHandler extends WebSocketServer {
 
     @Override
     public void onMessage(WebSocket webSocket, String s) {
+        try {
+            JSONObject object = Utils.tryJsonObject(s);
 
-        JSONObject object = Utils.tryJsonObject(s);
+            if (object == null) return;
 
-        if(object == null) return;
+            String status = object.getString("status");
 
-        String status = object.getString("status");
+            User user = getUser(webSocket);
+            if (!isValidUser(user)) return;
 
-        User user = getUser(webSocket);
-        if(!isValidUser(user)) return;
+            switch (status) {
 
-        switch (status){
-
-            case "connect": {
-                user.connect(object.getString("username"));
-                break;
+                case "connect": {
+                    user.connect(object.getString("username"), object.getInt("account_id"), object.getInt("user_id"));
+                    break;
+                }
+                case "connect_to_lobby": {
+                    user.connectToLobby(object.getString("lobby_id"));
+                    break;
+                }
+                case "host_lobby": {
+                    user.createLobby();
+                    break;
+                }
+                case "disconnect_lobby": {
+                    user.disconnectFromLobby();
+                    break;
+                }
+                case "toggle_pause_link": {
+                    if(user.isHost){
+                        user.isPauseLink = object.getBoolean("pause_link");
+                    }
+                    break;
+                }
+                case "kick": {
+                    user.kickUser(object.getInt("account_id"));
+                    break;
+                }
+                case "death": {
+                    user.propagateDeaths();
+                    break;
+                }
+                case "pause": {
+                    user.propagatePause();
+                    break;
+                }
+                case "unpause": {
+                    user.propagateUnpause();
+                    break;
+                }
             }
-            case "connect_to_lobby": {
-                user.connectToLobby(object.getString("lobby_id"));
-                break;
-            }
-            case "host_lobby": {
-                user.createLobby();
-                break;
-            }
-            case "disconnect_lobby": {
-                user.disconnectFromLobby();
-                break;
-            }
-            case "death": {
-                user.propagateDeaths();
-                break;
-            }
+        }
+        catch (Exception e){
+            e.printStackTrace();
         }
     }
 
